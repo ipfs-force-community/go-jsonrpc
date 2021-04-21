@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -479,6 +480,12 @@ func (fn *rpcFunc) processError(err error) []reflect.Value {
 	return out
 }
 
+const (
+	retryIntervalMin    = 4 * time.Second
+	retryIntervalMax    = 60 * time.Second
+	retryIntervalFactor = 2
+)
+
 func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value) {
 	id := atomic.AddInt64(&fn.client.idCtr, 1)
 	params := make([]param, len(args)-fn.hasCtx)
@@ -544,6 +551,11 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 	for attempt := 0; true; attempt++ {
 		resp, err = fn.client.sendRequest(ctx, req, chCtor)
 		if err != nil {
+			if fn.checkForRetry(err) {
+				log.Errorf("sendRequest failed: %w", err)
+				time.Sleep(time.Second * 4)
+				continue
+			}
 			return fn.processError(fmt.Errorf("sendRequest failed: %w", err))
 		}
 
@@ -573,6 +585,18 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 	}
 
 	return fn.processResponse(resp, retVal())
+}
+
+func (fn *rpcFunc) checkForRetry(err error) bool {
+	_, ok := err.(net.Error)
+	if ok {
+		return true
+	}
+
+	if err == io.EOF || err == io.ErrUnexpectedEOF || err == io.ErrShortWrite || err == io.ErrShortBuffer || err == io.ErrNoProgress {
+		return true
+	}
+	return false
 }
 
 func (c *client) makeRpcFunc(f reflect.StructField) (reflect.Value, error) {
