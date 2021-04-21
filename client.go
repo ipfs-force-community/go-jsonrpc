@@ -551,12 +551,21 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 	for attempt := 0; true; attempt++ {
 		resp, err = fn.client.sendRequest(ctx, req, chCtor)
 		if err != nil {
-			if fn.checkForRetry(err) {
+			/*if fn.checkForRetry(err) {
 				log.Errorf("sendRequest failed: %w", err)
-				time.Sleep(time.Second * 4)
+				time.Sleep(b.next(attempt))
 				continue
 			}
-			return fn.processError(fmt.Errorf("sendRequest failed: %w", err))
+			return fn.processError(fmt.Errorf("sendRequest failed: %w", err))*/
+			log.Errorf("sendRequest failed: %w", err)
+			time.Sleep(b.next(attempt))
+			continue
+		}
+
+		if resp.Error != nil && resp.Error.Code == 401 {
+			log.Errorf("auth failed: %w", resp.Error)
+			time.Sleep(b.next(attempt))
+			continue
 		}
 
 		if resp.ID != *req.ID {
