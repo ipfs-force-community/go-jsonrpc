@@ -113,7 +113,7 @@ func NewMergeClient(ctx context.Context, addr string, namespace string, outs []i
 
 	u, err := url.Parse(addr)
 	if err != nil {
-		return nil, xerrors.Errorf("parsing address: %w", err)
+		return nil, xerrors.Errorf("parsing address %s: %w", addr, err)
 	}
 
 	switch u.Scheme {
@@ -122,7 +122,7 @@ func NewMergeClient(ctx context.Context, addr string, namespace string, outs []i
 	case "http", "https":
 		return httpClient(ctx, addr, namespace, outs, requestHeader, config)
 	default:
-		return nil, xerrors.Errorf("unknown url scheme '%s'", u.Scheme)
+		return nil, xerrors.Errorf("unknown address %s url scheme '%s'", addr, u.Scheme)
 	}
 
 }
