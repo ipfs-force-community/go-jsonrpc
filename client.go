@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	methodMinRetryDelay = 100 * time.Millisecond
+	methodMinRetryDelay = 2 * time.Second
 	methodMaxRetryDelay = 10 * time.Minute
 )
 
