@@ -484,6 +484,7 @@ func (c *wsConn) setupPings() func() {
 	c.conn.SetPongHandler(func(appData string) error {
 		select {
 		case c.pongs <- struct{}{}:
+			log.Debugf("receive pongs message from peer %s", c.conn.RemoteAddr().String())
 		default:
 		}
 		return nil
@@ -496,6 +497,7 @@ func (c *wsConn) setupPings() func() {
 			select {
 			case <-time.After(c.pingInterval):
 				c.writeLk.Lock()
+				log.Debugf("send ping message to peer %s", c.conn.RemoteAddr().String())
 				if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Errorf("sending ping message: %+v", err)
 				}
@@ -520,6 +522,7 @@ func (c *wsConn) tryReconnect(ctx context.Context) bool {
 		return false
 	}
 
+	log.Debugw("try to reconnect to peer", c.conn.RemoteAddr().String())
 	// connection dropped unexpectedly, do our best to recover it
 	c.closeInFlight()
 	c.closeChans()
@@ -546,6 +549,7 @@ func (c *wsConn) tryReconnect(ctx context.Context) bool {
 
 		c.writeLk.Lock()
 		c.conn = conn
+		log.Debugf("reconnect to peer %s success", conn.RemoteAddr().String())
 		c.incomingErr = nil
 
 		c.stopPings = c.setupPings()
@@ -608,7 +612,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 
 			if ok {
 				// debug util - dump all messages to stderr
-				// r = io.TeeReader(r, os.Stderr)
+				//r = io.TeeReader(r, os.Stderr)
 
 				var frame frame
 				err = json.NewDecoder(r).Decode(&frame)
@@ -623,7 +627,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				return // remote closed
 			}
 
-			log.Debugw("websocket error", "error", err)
+			log.Debugw("websocket error", "error", err, "addr", c.conn.RemoteAddr())
 			// only client needs to reconnect
 			if !c.tryReconnect(ctx) {
 				return // failed to reconnect
@@ -638,6 +642,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 						Error:   fmt.Errorf("handler: websocket connection closed %w", NetError),
 					}
 					c.writeLk.Unlock()
+					log.Debugf("met incoming err while send request to %s", c.conn.RemoteAddr())
 					break
 				}
 				c.inflight[*req.req.ID] = req
@@ -648,6 +653,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 			}
 		case <-c.pongs:
 			if c.timeout > 0 {
+				log.Debugf("receive pong message from %s and increase timeout", c.conn.RemoteAddr())
 				if err := c.conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 					log.Error("setting read deadline", err)
 				}
@@ -658,6 +664,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				continue
 			}
 
+			log.Debugw("timeout to wait new message from peer %s", c.conn.RemoteAddr())
 			c.writeLk.Lock()
 			if err := c.conn.Close(); err != nil {
 				log.Warnw("timed-out websocket close error", "error", err)
@@ -671,6 +678,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 			// The client performs the reconnect operation, and if it exits it cannot start a handleWsConn again, so it does not need to exit
 			continue
 		case <-c.stop:
+			log.Debugf("close invoke from user %s", c.conn.RemoteAddr())
 			c.writeLk.Lock()
 			cmsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 			if err := c.conn.WriteMessage(websocket.CloseMessage, cmsg); err != nil {

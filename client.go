@@ -582,11 +582,11 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 			val := reflect.New(fn.ftyp.Out(fn.valOut))
 
 			if resp.Result != nil {
-				log.Debugw("rpc result", "type", fn.ftyp.Out(fn.valOut))
 				if err := json.Unmarshal(resp.Result, val.Interface()); err != nil {
 					log.Warnw("unmarshaling failed", "message", string(resp.Result))
 					return fn.processError(xerrors.Errorf("unmarshaling result: %w", err))
 				}
+				log.Debugw("rpc result", "type", fn.ftyp.Out(fn.valOut), "time", time.Since(tStart).Milliseconds())
 			}
 
 			retVal = func() reflect.Value { return val.Elem() }
