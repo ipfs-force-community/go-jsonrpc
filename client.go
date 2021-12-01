@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"net"
 	"net/http"
 	"net/url"
@@ -562,6 +563,8 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 		}
 	}
 
+	uid, _ := uuid.NewUUID()
+	log.Infof("%s make call", uid)
 	var resp clientResponse
 	// keep retrying if got a forced closed websocket conn and calling method
 	// has retry annotation
@@ -569,7 +572,7 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 		resp = fn.client.sendRequest(ctx, req, chCtor)
 		if xerrors.Is(resp.Error, NetError) && fn.retry {
 			waitTime := fn.backoff.next(attempt)
-			log.Errorf("wait %s retry to sendrequest %s", waitTime.Seconds(), resp.Error)
+			log.Errorf("%s attempt %d wait %s retry to sendrequest method %s %s", uid, attempt, waitTime, req.Method, resp.Error)
 			time.Sleep(waitTime)
 			continue
 		}
