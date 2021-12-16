@@ -495,10 +495,12 @@ func (c *wsConn) setupPings() func() {
 		for {
 			select {
 			case <-time.After(c.pingInterval):
+				log.Debug("send ping request %s", c.conn.RemoteAddr())
 				c.writeLk.Lock()
 				if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Errorf("sending ping message: %+v", err)
 				}
+				log.Debug("finish send ping request %s", c.conn.RemoteAddr())
 				c.writeLk.Unlock()
 			case <-stop:
 				return
@@ -647,6 +649,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				log.Errorf("sendReqest failed (Handle me): %s", err)
 			}
 		case <-c.pongs:
+			log.Debug("remove pong from %s", c.conn.RemoteAddr())
 			if c.timeout > 0 {
 				if err := c.conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 					log.Error("setting read deadline", err)
