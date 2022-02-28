@@ -566,6 +566,7 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 	// keep retrying if got a forced closed websocket conn and calling method
 	// has retry annotation
 	for attempt := 0; true; attempt++ {
+		tStart := time.Now()
 		resp = fn.client.sendRequest(ctx, req, chCtor)
 		if xerrors.Is(resp.Error, NetError) && fn.retry {
 			waitTime := fn.backoff.next(attempt)
