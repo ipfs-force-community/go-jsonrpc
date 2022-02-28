@@ -98,15 +98,17 @@ func (c *wsConn) nextMessage() {
 			log.Error("setting read deadline", err)
 		}
 	}
-	log.Debugf("read next message start")
+	fmt.Println("1")
+	log.Debugf("wait and read next message start")
 	msgType, r, err := c.conn.NextReader()
 	if err != nil {
-		log.Debugf("read next message error ", err.Error())
+		log.Debugf("wait and read next message error ", err.Error())
 		c.incomingErr = err
 		close(c.incoming)
 		return
 	}
-	log.Debugf("read next message finish")
+	fmt.Println("111")
+	log.Debugf("wait and read next message finish")
 	if msgType != websocket.BinaryMessage && msgType != websocket.TextMessage {
 		c.incomingErr = errors.New("unsupported message type")
 		close(c.incoming)
@@ -138,7 +140,7 @@ func (c *wsConn) nextWriter(cb func(io.Writer)) {
 func (c *wsConn) sendRequest(req request) error {
 	c.writeLk.Lock()
 	defer c.writeLk.Unlock()
-	log.Debugw("send request")
+	log.Debugw("send request", "method", req.Method, "id", req.ID)
 	if err := c.conn.WriteJSON(req); err != nil {
 		return err
 	}
