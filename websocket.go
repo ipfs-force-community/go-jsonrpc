@@ -138,7 +138,7 @@ func (c *wsConn) nextWriter(cb func(io.Writer)) {
 func (c *wsConn) sendRequest(req request) error {
 	c.writeLk.Lock()
 	defer c.writeLk.Unlock()
-	fmt.Println("send request")
+	log.Debugw("send request")
 	if err := c.conn.WriteJSON(req); err != nil {
 		return err
 	}
@@ -654,10 +654,12 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				}
 				c.inflight[*req.req.ID] = req
 			}
+			log.Infof("send request start")
 			c.writeLk.Unlock()
 			if err := c.sendRequest(req.req); err != nil {
 				log.Errorf("sendReqest failed (Handle me): %s", err)
 			}
+			log.Infof("send request finish")
 		case <-c.pongs:
 			if c.timeout > 0 {
 				log.Debugf("receive pong message from %s and increase timeout", c.conn.RemoteAddr())
