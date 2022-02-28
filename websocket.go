@@ -98,12 +98,15 @@ func (c *wsConn) nextMessage() {
 			log.Error("setting read deadline", err)
 		}
 	}
+	log.Debugf("read next message start")
 	msgType, r, err := c.conn.NextReader()
 	if err != nil {
+		log.Debugf("read next message error ", err.Error())
 		c.incomingErr = err
 		close(c.incoming)
 		return
 	}
+	log.Debugf("read next message finish")
 	if msgType != websocket.BinaryMessage && msgType != websocket.TextMessage {
 		c.incomingErr = errors.New("unsupported message type")
 		close(c.incoming)
@@ -135,7 +138,7 @@ func (c *wsConn) nextWriter(cb func(io.Writer)) {
 func (c *wsConn) sendRequest(req request) error {
 	c.writeLk.Lock()
 	defer c.writeLk.Unlock()
-
+	fmt.Println("send request")
 	if err := c.conn.WriteJSON(req); err != nil {
 		return err
 	}
@@ -601,6 +604,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				default:
 				}
 			}
+			log.Debugw("reset websocket loop timer")
 			timeoutTimer.Reset(c.timeout)
 
 			timeoutCh = timeoutTimer.C
@@ -617,13 +621,16 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				var frame frame
 				err = json.NewDecoder(r).Decode(&frame)
 				if err == nil {
+					log.Debugf("receive incoming message start")
 					c.handleFrame(ctx, frame)
 					go c.nextMessage()
+					log.Debugf("receive incoming message finish and wait to next message")
 					continue
 				}
 			}
 
 			if err == nil {
+				log.Debugw("remote closed")
 				return // remote closed
 			}
 
