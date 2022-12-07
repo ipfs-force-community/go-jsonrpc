@@ -178,12 +178,11 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 				return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) do request error %s", NetError, err)}
 			}
 		}
-
 		defer httpResp.Body.Close()
 
 		var respFrame frame
 		if err := json.NewDecoder(httpResp.Body).Decode(&respFrame); err != nil {
-			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) unmarshaling response: %s", rpcParseError, err)}
+			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) http status %s unmarshaling response: %s", rpcParseError, httpResp.Status, err)}
 		}
 		if *respFrame.ID != *cr.req.ID {
 			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) request and response id didn't match", rpcWrongId)}
