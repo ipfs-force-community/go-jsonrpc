@@ -178,8 +178,11 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 				return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) do request error %s", NetError, err)}
 			}
 		}
-
 		defer httpResp.Body.Close()
+
+		if httpResp.StatusCode == http.StatusUnauthorized {
+			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) http status %s", AuthError, httpResp.Status)}
+		}
 
 		var respFrame frame
 		if err := json.NewDecoder(httpResp.Body).Decode(&respFrame); err != nil {
