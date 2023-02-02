@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -16,21 +15,11 @@ import (
 
 // RPCServer provides a jsonrpc 2.0 http server handler
 type RPCServer struct {
-	methods map[string]rpcHandler
+	*handler
+	reverseClientBuilder func(context.Context, *wsConn) (context.Context, error)
 
-	// aliasedMethods contains a map of alias:original method names.
-	// These are used as fallbacks if a method is not found by the given method name.
-	aliasedMethods map[string]string
-
-	paramDecoders map[reflect.Type]ParamDecoder
-
-	timeout time.Duration
-
+	timeout      time.Duration
 	pingInterval time.Duration
-
-	maxRequestSize int64
-
-	proxyBind ProxyBind
 }
 
 // NewServer creates new RPCServer instance
@@ -41,13 +30,10 @@ func NewServer(opts ...ServerOption) *RPCServer {
 	}
 
 	return &RPCServer{
-		methods:        map[string]rpcHandler{},
-		aliasedMethods: map[string]string{},
-		paramDecoders:  config.paramDecoders,
-		maxRequestSize: config.maxRequestSize,
-		timeout:        config.timeout,
-		pingInterval:   config.pingInterval,
-		proxyBind:      config.proxyBind,
+		handler:              makeHandler(config),
+		reverseClientBuilder: config.reverseClientBuilder,
+		timeout:              config.timeout,
+		pingInterval:         config.pingInterval,
 	}
 }
 
@@ -72,13 +58,23 @@ func (s *RPCServer) handleWS(ctx context.Context, w http.ResponseWriter, r *http
 		return
 	}
 
-	(&wsConn{
+	wc := &wsConn{
 		conn:         c,
 		handler:      s,
 		exiting:      make(chan struct{}),
 		timeout:      s.timeout,
 		pingInterval: s.pingInterval,
-	}).handleWsConn(ctx)
+	}
+	if s.reverseClientBuilder != nil {
+		ctx, err = s.reverseClientBuilder(ctx, wc)
+		if err != nil {
+			log.Errorf("failed to build reverse client: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+	}
+
+	wc.handleWsConn(ctx)
 
 	if err := c.Close(); err != nil {
 		log.Error(err)
