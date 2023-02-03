@@ -218,10 +218,17 @@ func (s *handler) registerInnerStructField(namespace string, val reflect.Value) 
 				hasCtx = 1
 			}
 
+			hasRawParams := false
 			ins := funcType.NumIn() - hasCtx
 			recvs := make([]reflect.Type, ins)
 			for i := 0; i < ins; i++ {
 				recvs[i] = field.Type.In(i + hasCtx)
+				if hasRawParams && i > 1 {
+					panic("raw params must be the last parameter")
+				}
+				if funcType.In(i+hasCtx) == rtRawParams {
+					hasRawParams = true
+				}
 			}
 
 			valOut, errOut, _ := processFuncOut(funcType)
@@ -233,7 +240,8 @@ func (s *handler) registerInnerStructField(namespace string, val reflect.Value) 
 				handlerFunc: val.Field(i),
 				receiver:    val,
 
-				hasCtx: hasCtx,
+				hasCtx:       hasCtx,
+				hasRawParams: hasRawParams,
 
 				errOut: errOut,
 				valOut: valOut,
