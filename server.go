@@ -3,12 +3,13 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
-	"golang.org/x/xerrors"
 	"io"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"github.com/gorilla/websocket"
 )
@@ -115,7 +116,7 @@ func rpcError(wf func(func(io.Writer)), req *request, err error) {
 		_ = xerrors.As(err, &code)
 		resp := response{
 			Jsonrpc: "2.0",
-			ID:      *req.ID,
+			ID:      req.ID,
 			Error: respError{
 				Code:    code,
 				Message: err.Error(),

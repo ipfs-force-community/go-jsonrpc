@@ -38,7 +38,7 @@ type rpcHandler struct {
 
 type request struct {
 	Jsonrpc string            `json:"jsonrpc"`
-	ID      *int64            `json:"id,omitempty"`
+	ID      interface{}       `json:"id,omitempty"`
 	Method  string            `json:"method"`
 	Params  []param           `json:"params"`
 	Meta    map[string]string `json:"meta,omitempty"`
@@ -92,7 +92,7 @@ func (e respError) Is(code error) bool {
 type response struct {
 	Jsonrpc string      `json:"jsonrpc"`
 	Result  interface{} `json:"result,omitempty"`
-	ID      int64       `json:"id"`
+	ID      interface{} `json:"id"`
 	Error   error       `json:"error,omitempty"`
 }
 
@@ -194,7 +194,7 @@ func (s *RPCServer) registerInnerStructField(namespace string, val reflect.Value
 // Handle
 
 type rpcErrFunc func(w func(func(io.Writer)), req *request, err error)
-type chanOut func(reflect.Value, int64) error
+type chanOut func(reflect.Value, interface{}) error
 
 func (s *RPCServer) handleReader(ctx context.Context, r io.Reader, w io.Writer, rpcError rpcErrFunc) {
 	wf := func(cb func(io.Writer)) {
@@ -229,6 +229,11 @@ func (s *RPCServer) handleReader(ctx context.Context, r io.Reader, w io.Writer, 
 
 	if err := json.NewDecoder(bufferedRequest).Decode(&req); err != nil {
 		rpcError(wf, &req, xerrors.Errorf("(%w) unmarshaling request: %s", rpcParseError, err))
+		return
+	}
+
+	if req.ID, err = normalizeID(req.ID); err != nil {
+		rpcError(wf, &req, fmt.Errorf("(%w) failed to parse ID: %v", rpcParseError, err))
 		return
 	}
 
@@ -363,7 +368,7 @@ func (s *RPCServer) handle(ctx context.Context, req request, w func(func(io.Writ
 
 	resp := response{
 		Jsonrpc: "2.0",
-		ID:      *req.ID,
+		ID:      req.ID,
 	}
 	//respinse must give resp error format.
 
@@ -399,7 +404,7 @@ func (s *RPCServer) handle(ctx context.Context, req request, w func(func(io.Writ
 			// sending channel messages before this rpc call returns
 
 			//noinspection GoNilness // already checked above
-			err = chOut(callResult[handler.valOut], *req.ID)
+			err = chOut(callResult[handler.valOut], req.ID)
 			if err == nil {
 				return // channel goroutine handles responding
 			}

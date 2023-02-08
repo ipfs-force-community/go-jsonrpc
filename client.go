@@ -67,7 +67,7 @@ func (e *ErrClient) Unwrap(err error) error {
 type clientResponse struct {
 	Jsonrpc string          `json:"jsonrpc"`
 	Result  json.RawMessage `json:"result"`
-	ID      int64           `json:"id"`
+	ID      interface{}     `json:"id"`
 	Error   error           `json:"error,omitempty"`
 }
 
@@ -145,12 +145,12 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 	c.doRequest = func(ctx context.Context, cr clientRequest) clientResponse {
 		b, err := json.Marshal(&cr.req)
 		if err != nil {
-			return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) marshaling requset: %s", rpcMarshalERROR, err)}
+			return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) marshaling requset: %s", rpcMarshalERROR, err)}
 		}
 
 		hreq, err := http.NewRequest("POST", addr, bytes.NewReader(b))
 		if err != nil {
-			return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) request error %s", rpcInvalidParams, err)}
+			return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) request error %s", rpcInvalidParams, err)}
 		}
 
 		hreq.Header = requestHeader.Clone()
@@ -173,24 +173,27 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 		httpResp, err := _defaultHTTPClient.Do(hreq) //todo cancel by timeout or neterror
 		if err != nil {
 			if cancelByCtx {
-				return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) cancel by context %s", rpcExiting, err)}
+				return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) cancel by context %s", rpcExiting, err)}
 			} else {
-				return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) do request error %s", NetError, err)}
+				return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) do request error %s", NetError, err)}
 			}
 		}
 		defer httpResp.Body.Close()
 
 		var respFrame frame
 		if err := json.NewDecoder(httpResp.Body).Decode(&respFrame); err != nil {
-			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) http status %s unmarshaling response: %s", rpcParseError, httpResp.Status, err)}
+			return clientResponse{ID: cr.req.ID, Error: xerrors.Errorf("(%w) http status %s unmarshaling response: %s", rpcParseError, httpResp.Status, err)}
 		}
-		if *respFrame.ID != *cr.req.ID {
-			return clientResponse{ID: *cr.req.ID, Error: xerrors.Errorf("(%w) request and response id didn't match", rpcWrongId)}
+		if respFrame.ID, err = normalizeID(respFrame.ID); err != nil {
+			return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) failed to response ID: %s", rpcWrongId, err)}
+		}
+		if respFrame.ID != cr.req.ID {
+			return clientResponse{ID: cr.req.ID, Error: xerrors.Errorf("(%w) request and response id didn't match", rpcWrongId)}
 		}
 
 		res := clientResponse{
 			Jsonrpc: respFrame.Jsonrpc,
-			ID:      *respFrame.ID,
+			ID:      respFrame.ID,
 			Result:  respFrame.Result,
 		}
 		if respFrame.Error != nil {
@@ -244,7 +247,7 @@ func websocketClient(ctx context.Context, addr string, namespace string, outs []
 		select {
 		case requests <- cr:
 		case <-c.exiting:
-			return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) websocket routine exiting", rpcExiting)}
+			return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) websocket routine exiting", rpcExiting)}
 		}
 
 		var ctxDone <-chan struct{}
@@ -267,7 +270,7 @@ func websocketClient(ctx context.Context, addr string, namespace string, outs []
 					req: request{
 						Jsonrpc: "2.0",
 						Method:  wsCancel,
-						Params:  []param{{v: reflect.ValueOf(*cr.req.ID)}},
+						Params:  []param{{v: reflect.ValueOf(cr.req.ID)}},
 					},
 				}
 				select {
@@ -276,7 +279,7 @@ func websocketClient(ctx context.Context, addr string, namespace string, outs []
 					log.Warn("failed to send request cancellation, websocket routing exited")
 				}
 
-				return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) context by cancel", rpcExiting)}
+				return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) context by cancel", rpcExiting)}
 			}
 		}
 
@@ -509,7 +512,7 @@ func (fn *rpcFunc) processError(err error) []reflect.Value {
 }
 
 func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value) {
-	id := atomic.AddInt64(&fn.client.idCtr, 1)
+	var id interface{} = atomic.AddInt64(&fn.client.idCtr, 1)
 	params := make([]param, len(args)-fn.hasCtx)
 	for i, arg := range args[fn.hasCtx:] {
 		enc, found := fn.client.paramEncoders[arg.Type()]
@@ -544,9 +547,19 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 		retVal, chCtor = fn.client.makeOutChan(ctx, fn.ftyp, fn.valOut)
 	}
 
+	// Prepare the ID to send on the wire.
+	// We track int64 ids as float64 in the inflight map (because that's what
+	// they'll be decoded to). encoding/json outputs numbers with their minimal
+	// encoding, avoding the decimal point when possible, i.e. 3 will never get
+	// converted to 3.0.
+	id, err := normalizeID(id)
+	if err != nil {
+		return fn.processError(fmt.Errorf("failed to normalize id")) // should probably panic
+	}
+
 	req := request{
 		Jsonrpc: "2.0",
-		ID:      &id,
+		ID:      id,
 		Method:  fn.client.namespace + "." + fn.name,
 		Params:  params,
 	}
@@ -573,7 +586,7 @@ func (fn *rpcFunc) handleRpcCall(args []reflect.Value) (results []reflect.Value)
 			continue
 		}
 
-		if resp.ID != *req.ID {
+		if resp.ID != req.ID {
 			return fn.processError(xerrors.New("request and response id didn't match"))
 		}
 
