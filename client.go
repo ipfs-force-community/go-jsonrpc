@@ -145,7 +145,7 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 	c.doRequest = func(ctx context.Context, cr clientRequest) clientResponse {
 		b, err := json.Marshal(&cr.req)
 		if err != nil {
-			return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) mershaling requset: %s", rpcMarshalERROR, err)}
+			return clientResponse{ID: *cr.req.ID, Error: fmt.Errorf("(%w) marshaling requset: %s", rpcMarshalERROR, err)}
 		}
 
 		hreq, err := http.NewRequest("POST", addr, bytes.NewReader(b))
