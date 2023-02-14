@@ -9,12 +9,20 @@ import (
 
 type ParamEncoder func(reflect.Value) (reflect.Value, error)
 
+type clientHandler struct {
+	ns  string
+	hnd interface{}
+}
+
 type Config struct {
 	reconnectBackoff backoff
 	pingInterval     time.Duration
 	timeout          time.Duration
 	retry            bool
 	paramEncoders    map[reflect.Type]ParamEncoder
+
+	reverseHandlers       []clientHandler
+	aliasedHandlerMethods map[string]string
 
 	noReconnect      bool
 	proxyConnFactory func(func() (*websocket.Conn, error)) func() (*websocket.Conn, error) // for testing
@@ -28,6 +36,8 @@ func defaultConfig() Config {
 		},
 		pingInterval: 5 * time.Second,
 		timeout:      30 * time.Second,
+
+		aliasedHandlerMethods: map[string]string{},
 
 		paramEncoders: map[reflect.Type]ParamEncoder{},
 	}
@@ -72,5 +82,19 @@ func WithNoReconnect() func(c *Config) {
 func WithParamEncoder(t interface{}, encoder ParamEncoder) func(c *Config) {
 	return func(c *Config) {
 		c.paramEncoders[reflect.TypeOf(t).Elem()] = encoder
+	}
+}
+
+func WithClientHandler(ns string, hnd interface{}) func(c *Config) {
+	return func(c *Config) {
+		c.reverseHandlers = append(c.reverseHandlers, clientHandler{ns, hnd})
+	}
+}
+
+// WithClientHandlerAlias creates an alias for a client HANDLER method - for handlers created
+// with WithClientHandler
+func WithClientHandlerAlias(alias, original string) func(c *Config) {
+	return func(c *Config) {
+		c.aliasedHandlerMethods[alias] = original
 	}
 }
