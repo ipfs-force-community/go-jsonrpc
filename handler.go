@@ -382,7 +382,7 @@ func (s *handler) handle(ctx context.Context, req request, w func(func(io.Writer
 		// When hasRawParams is true, there is only one parameter and it is a
 		// json.RawMessage.
 
-		callParams[1+handler.hasCtx] = reflect.ValueOf(RawParams(req.Params))
+		callParams[ctxParamIndex+handler.hasCtx] = reflect.ValueOf(RawParams(req.Params))
 	} else {
 		// "normal" param list; no good way to do named params in Golang
 
