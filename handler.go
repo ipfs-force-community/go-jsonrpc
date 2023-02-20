@@ -170,10 +170,10 @@ func (s *handler) registerWithMethod(namespace string, r interface{}) {
 		ins := funcType.NumIn() - 1 - hasCtx
 		recvs := make([]reflect.Type, ins)
 		for i := 0; i < ins; i++ {
-			recvs[i] = method.Type.In(i + 1 + hasCtx)
 			if hasRawParams && i > 0 {
 				panic("raw params must be the last parameter")
 			}
+			recvs[i] = method.Type.In(i + 1 + hasCtx)
 			if funcType.In(i+1+hasCtx) == rtRawParams {
 				hasRawParams = true
 			}
@@ -222,10 +222,10 @@ func (s *handler) registerInnerStructField(namespace string, val reflect.Value) 
 			ins := funcType.NumIn() - hasCtx
 			recvs := make([]reflect.Type, ins)
 			for i := 0; i < ins; i++ {
-				recvs[i] = field.Type.In(i + hasCtx)
-				if hasRawParams && i > 1 {
+				if hasRawParams && i > 0 {
 					panic("raw params must be the last parameter")
 				}
+				recvs[i] = field.Type.In(i + hasCtx)
 				if funcType.In(i+hasCtx) == rtRawParams {
 					hasRawParams = true
 				}
@@ -382,7 +382,7 @@ func (s *handler) handle(ctx context.Context, req request, w func(func(io.Writer
 		// When hasRawParams is true, there is only one parameter and it is a
 		// json.RawMessage.
 
-		callParams[1+handler.hasCtx] = reflect.ValueOf(RawParams(req.Params))
+		callParams[ctxParamIndex+handler.hasCtx] = reflect.ValueOf(RawParams(req.Params))
 	} else {
 		// "normal" param list; no good way to do named params in Golang
 
@@ -426,7 +426,7 @@ func (s *handler) handle(ctx context.Context, req request, w func(func(io.Writer
 				}
 			}
 
-			callParams[i+1+handler.hasCtx] = reflect.ValueOf(rp.Interface())
+			callParams[i+ctxParamIndex+handler.hasCtx] = reflect.ValueOf(rp.Interface())
 		}
 	}
 
