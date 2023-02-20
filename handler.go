@@ -426,7 +426,7 @@ func (s *handler) handle(ctx context.Context, req request, w func(func(io.Writer
 				}
 			}
 
-			callParams[i+1+handler.hasCtx] = reflect.ValueOf(rp.Interface())
+			callParams[i+ctxParamIndex+handler.hasCtx] = reflect.ValueOf(rp.Interface())
 		}
 	}
 
