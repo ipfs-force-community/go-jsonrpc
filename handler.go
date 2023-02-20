@@ -170,10 +170,10 @@ func (s *handler) registerWithMethod(namespace string, r interface{}) {
 		ins := funcType.NumIn() - 1 - hasCtx
 		recvs := make([]reflect.Type, ins)
 		for i := 0; i < ins; i++ {
-			recvs[i] = method.Type.In(i + 1 + hasCtx)
 			if hasRawParams && i > 0 {
 				panic("raw params must be the last parameter")
 			}
+			recvs[i] = method.Type.In(i + 1 + hasCtx)
 			if funcType.In(i+1+hasCtx) == rtRawParams {
 				hasRawParams = true
 			}
@@ -222,10 +222,10 @@ func (s *handler) registerInnerStructField(namespace string, val reflect.Value) 
 			ins := funcType.NumIn() - hasCtx
 			recvs := make([]reflect.Type, ins)
 			for i := 0; i < ins; i++ {
-				recvs[i] = field.Type.In(i + hasCtx)
-				if hasRawParams && i > 1 {
+				if hasRawParams && i > 0 {
 					panic("raw params must be the last parameter")
 				}
+				recvs[i] = field.Type.In(i + hasCtx)
 				if funcType.In(i+hasCtx) == rtRawParams {
 					hasRawParams = true
 				}
