@@ -155,18 +155,21 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 
 		hreq.Header = requestHeader.Clone()
 
-		var cancelByCtx bool
-		if ctx != nil {
-			wCtx, wCancel := context.WithCancel(context.Background())
-			hreq = hreq.WithContext(wCtx)
-			go func() {
-				select {
-				case <-ctx.Done():
-					cancelByCtx = true
-					wCancel()
-				}
-			}()
+		if ctx == nil {
+			ctx = context.Background()
 		}
+		wCtx, wCancel := context.WithCancel(ctx)
+		defer wCancel()
+
+		var cancelByCtx bool
+		go func() {
+			// this may never trigger
+			<-ctx.Done()
+			cancelByCtx = true
+			wCancel()
+		}()
+
+		hreq = hreq.WithContext(wCtx)
 
 		hreq.Header.Set("Content-Type", "application/json")
 

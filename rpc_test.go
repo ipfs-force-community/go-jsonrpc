@@ -1322,3 +1322,13 @@ func TestReverseCallAliased(t *testing.T) {
 
 	closer()
 }
+
+func TestMultiCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cancel()
+	cancel()
+
+	<-ctx.Done()
+	require.Equal(t, context.Canceled, ctx.Err())
+}
