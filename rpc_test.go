@@ -407,7 +407,7 @@ type CtxHandler struct {
 	i         int
 }
 
-func (h *CtxHandler) Test(ctx context.Context) {
+func (h *CtxHandler) Test(ctx context.Context) error {
 	h.lk.Lock()
 	defer h.lk.Unlock()
 	timeout := time.After(300 * time.Millisecond)
@@ -417,7 +417,10 @@ func (h *CtxHandler) Test(ctx context.Context) {
 	case <-timeout:
 	case <-ctx.Done():
 		h.cancelled = true
+		return ctx.Err()
 	}
+
+	return nil
 }
 
 func TestCtx(t *testing.T) {
@@ -435,7 +438,7 @@ func TestCtx(t *testing.T) {
 	// setup client
 
 	var client struct {
-		Test func(ctx context.Context)
+		Test func(ctx context.Context) error
 	}
 	closer, err := NewClient(context.Background(), "ws://"+testServ.Listener.Addr().String(), "CtxHandler", &client, nil)
 	require.NoError(t, err)
@@ -443,7 +446,10 @@ func TestCtx(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	client.Test(ctx)
+	err = client.Test(ctx)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, rpcExiting))
+
 	serverHandler.lk.Lock()
 
 	if !serverHandler.cancelled {
@@ -456,14 +462,15 @@ func TestCtx(t *testing.T) {
 	closer()
 
 	var noCtxClient struct {
-		Test func()
+		Test func() error
 	}
 	closer, err = NewClient(context.Background(), "ws://"+testServ.Listener.Addr().String(), "CtxHandler", &noCtxClient, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	noCtxClient.Test()
+	err = noCtxClient.Test()
+	require.NoError(t, err)
 
 	serverHandler.lk.Lock()
 
@@ -490,15 +497,19 @@ func TestCtxHttp(t *testing.T) {
 	// setup client
 
 	var client struct {
-		Test func(ctx context.Context)
+		Test func(ctx context.Context) error
 	}
 	closer, err := NewClient(context.Background(), "http://"+testServ.Listener.Addr().String(), "CtxHandler", &client, nil)
 	require.NoError(t, err)
 
+	// test timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	client.Test(ctx)
+	err = client.Test(ctx)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, rpcExiting))
+
 	serverHandler.lk.Lock()
 
 	if !serverHandler.cancelled {
@@ -508,21 +519,45 @@ func TestCtxHttp(t *testing.T) {
 	serverHandler.cancelled = false
 
 	serverHandler.lk.Unlock()
+
+	// test cancel
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		cancel()
+	}()
+
+	err = client.Test(ctx)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, rpcExiting))
+
+	serverHandler.lk.Lock()
+
+	if !serverHandler.cancelled {
+		t.Error("expected cancellation on the server side")
+	}
+
+	serverHandler.cancelled = false
+
+	serverHandler.lk.Unlock()
+
 	closer()
 
+	// test no context
 	var noCtxClient struct {
-		Test func()
+		Test func() error
 	}
 	closer, err = NewClient(context.Background(), "ws://"+testServ.Listener.Addr().String(), "CtxHandler", &noCtxClient, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	noCtxClient.Test()
+	err = noCtxClient.Test()
+	require.NoError(t, err)
 
 	serverHandler.lk.Lock()
 
-	if serverHandler.cancelled || serverHandler.i != 2 {
+	if serverHandler.cancelled || serverHandler.i != 3 {
 		t.Error("wrong serverHandler state")
 	}
 
@@ -1321,14 +1356,4 @@ func TestReverseCallAliased(t *testing.T) {
 	require.NoError(t, e)
 
 	closer()
-}
-
-func TestMultiCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	cancel()
-	cancel()
-
-	<-ctx.Done()
-	require.Equal(t, context.Canceled, ctx.Err())
 }

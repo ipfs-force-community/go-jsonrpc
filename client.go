@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -158,24 +159,14 @@ func httpClient(ctx context.Context, addr string, namespace string, outs []inter
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		wCtx, wCancel := context.WithCancel(ctx)
-		defer wCancel()
-
-		var cancelByCtx bool
-		go func() {
-			// this may never trigger
-			<-ctx.Done()
-			cancelByCtx = true
-			wCancel()
-		}()
-
-		hreq = hreq.WithContext(wCtx)
+		hreq = hreq.WithContext(ctx)
 
 		hreq.Header.Set("Content-Type", "application/json")
 
 		httpResp, err := _defaultHTTPClient.Do(hreq) //todo cancel by timeout or neterror
 		if err != nil {
-			if cancelByCtx {
+			if strings.Contains(err.Error(), context.DeadlineExceeded.Error()) ||
+				strings.Contains(err.Error(), context.Canceled.Error()) {
 				return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) cancel by context %s", rpcExiting, err)}
 			} else {
 				return clientResponse{ID: cr.req.ID, Error: fmt.Errorf("(%w) do request error %s", NetError, err)}
