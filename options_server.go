@@ -76,9 +76,7 @@ func WithReverseClient[RP any](namespace string) ServerOption {
 				paramEncoders: map[reflect.Type]ParamEncoder{},
 			}
 
-			// todo test that everything is closing correctly
-			stop := make(chan struct{}) // todo better stop?
-			cl.exiting = stop
+			cl.exiting = conn.exiting
 
 			requests := cl.setupRequestChan()
 			conn.requests = requests
