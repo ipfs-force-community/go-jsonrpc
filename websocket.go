@@ -494,7 +494,7 @@ func (c *wsConn) closeInFlight() {
 		req.ready <- clientResponse{
 			Jsonrpc: "2.0",
 			ID:      id,
-			Error:   fmt.Errorf("handler: websocket connection closed %w", NetError),
+			Error:   fmt.Errorf("handler: websocket connection closed: %v, %w", c.incomingErr, NetError),
 		}
 	}
 
@@ -668,7 +668,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				return // remote closed
 			}
 
-			log.Debugw("websocket error", "error", err)
+			log.Warnw("websocket error", "error", err)
 			// only client needs to reconnect
 			if !c.tryReconnect(ctx) {
 				return // failed to reconnect
@@ -680,7 +680,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 					req.ready <- clientResponse{
 						Jsonrpc: "2.0",
 						ID:      req.req.ID,
-						Error:   fmt.Errorf("handler: websocket connection closed %w", NetError),
+						Error:   fmt.Errorf("handler: websocket connection closed: %v, %w", c.incomingErr, NetError),
 					}
 					c.writeLk.Unlock()
 					break
