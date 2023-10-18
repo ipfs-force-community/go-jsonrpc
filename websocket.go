@@ -668,7 +668,14 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 				return // remote closed
 			}
 
-			log.Warnw("websocket error", "error", err)
+			// https://github.com/gorilla/websocket/blob/main/conn_test.go#L355
+			// 从测试用例来看，这个错误是预期之内的
+			if e, ok := err.(*websocket.CloseError); ok && e.Code == websocket.CloseNormalClosure {
+				log.Debugw("websocket error", "error", err)
+			} else {
+				log.Warnw("websocket error", "error", err)
+			}
+
 			// only client needs to reconnect
 			if !c.tryReconnect(ctx) {
 				return // failed to reconnect
