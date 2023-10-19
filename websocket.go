@@ -494,7 +494,7 @@ func (c *wsConn) closeInFlight() {
 		req.ready <- clientResponse{
 			Jsonrpc: "2.0",
 			ID:      id,
-			Error:   fmt.Errorf("handler: websocket connection closed: %v, %w", c.incomingErr, NetError),
+			Error:   fmt.Errorf("handler: websocket connection closed: %w", NetError),
 		}
 	}
 
