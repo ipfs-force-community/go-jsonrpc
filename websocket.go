@@ -673,7 +673,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 			if e, ok := err.(*websocket.CloseError); ok && e.Code == websocket.CloseNormalClosure {
 				log.Debugw("websocket error", "error", err)
 			} else {
-				log.Warnw("websocket error", "error", err)
+				log.Infow("websocket error", "error", err)
 			}
 
 			// only client needs to reconnect
